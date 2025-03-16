@@ -1,0 +1,6 @@
+node_modules/
+.env
+failed_webhooks/*.json
+coverage/
+logs/
+certs/
