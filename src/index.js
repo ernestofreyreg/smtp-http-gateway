@@ -48,7 +48,15 @@ class SmtpHttpGateway {
       size: this.config.MAX_MESSAGE_SIZE,
       onAuth: this.config.AUTH_REQUIRED ? (auth, session, callback) => {
         const user = this.config.USERS[auth.username];
-        this.logger.info(`login: ${auth.username} password: ${auth.password}`);        
+        if (!user || user !== auth.password) {
+          this.logger.warn(`Authentication failed for user: ${auth.username}`);
+          return callback(new Error('Invalid username or password'));
+        }
+        // Store auth info in session
+        session.auth = {
+          username: auth.username,
+          password: auth.password
+        };
         this.logger.debug(`User authenticated: ${auth.username}`);
         callback(null, { user: auth.username });
       } : null,
@@ -121,11 +129,12 @@ class SmtpHttpGateway {
           remoteAddress: session.remoteAddress,
           transmissionId: session.id,
           envelope: session.envelope,
-        },
-        auth: session.auth ? {
-          username: session.auth.user,
-          password: session.auth.pass,
-        } : null,
+          auth: session.auth ? {
+            username: session.auth.username,
+            // Don't send the actual password in the webhook for security
+            authenticated: true
+          } : null
+        }
       };
       
       // Add headers
