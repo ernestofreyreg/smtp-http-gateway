@@ -122,10 +122,10 @@ class SmtpHttpGateway {
           transmissionId: session.id,
           envelope: session.envelope,
         },
-        auth: {
-          username: session.auth.username,
-          password: session.auth.password,
-        }
+        auth: session.auth ? {
+          username: session.auth.user,
+          password: session.auth.pass,
+        } : null,
       };
       
       // Add headers
