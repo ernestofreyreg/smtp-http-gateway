@@ -5,7 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const { loadConfig } = require('./config');
 const { parseSimpleYaml } = require('./helpers');
-const EmailssarySDK = require('emailssary-sdk');
+const { EmailssarySDK } = require('emailssary-sdk');
+
 class SmtpHttpGateway {
   constructor(customConfig = {}) {
     // Load configuration
