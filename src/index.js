@@ -47,17 +47,11 @@ class SmtpHttpGateway {
       secure: this.config.TLS,
       size: this.config.MAX_MESSAGE_SIZE,
       onAuth: this.config.AUTH_REQUIRED ? (auth, session, callback) => {
-        const user = this.config.USERS[auth.username];
-        if (!user || user !== auth.password) {
-          this.logger.warn(`Authentication failed for user: ${auth.username}`);
-          return callback(new Error('Invalid username or password'));
-        }
         // Store auth info in session
         session.auth = {
           username: auth.username,
           password: auth.password
-        };
-        this.logger.debug(`User authenticated: ${auth.username}`);
+        };        
         callback(null, { user: auth.username });
       } : null,
       authOptional: !this.config.AUTH_REQUIRED,
