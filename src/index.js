@@ -58,25 +58,41 @@ class SmtpHttpGateway {
       } : null,
       authOptional: !this.config.AUTH_REQUIRED,
       logger: this.config.LOG_LEVEL === 'debug',
-      // Allow non-secure connections to upgrade to TLS
-      allowInsecureAuth: !this.config.TLS,
-      // Enable STARTTLS command
-      hideSTARTTLS: false,
-      // TLS options
+      // TLS configuration
+      secure: false, // Start with non-secure, allow STARTTLS upgrade
+      allowInsecureAuth: true, // Allow authentication on non-secure connections
+      hideSTARTTLS: false, // Enable STARTTLS command
+      // Enhanced TLS options
       tls: {
-        rejectUnauthorized: false // Accept self-signed certificates
+        rejectUnauthorized: false, // Accept self-signed certificates
+        minVersion: 'TLSv1.2', // Minimum TLS version
+        ciphers: 'HIGH:MEDIUM:!aNULL:!eNULL:!NULL:!DH:!EDH:!AESGCM:!DSS:!SHA1:!SHA256:!SHA384:!CAMELLIA', // Strong ciphers
+        honorCipherOrder: true, // Use server's cipher preferences
+        handshakeTimeout: 10000, // 10 seconds timeout for handshake
+        requestCert: false, // Don't require client certificate
+        sessionTimeout: 600, // 10 minutes session timeout
       }
     };
 
     // Add TLS certificates if TLS is enabled
     if (this.config.TLS) {
       try {
-        smtpOptions.key = fs.readFileSync(this.config.TLS_KEY);
-        smtpOptions.cert = fs.readFileSync(this.config.TLS_CERT);
-        this.logger.info('TLS certificates loaded successfully');
+        const key = fs.readFileSync(this.config.TLS_KEY);
+        const cert = fs.readFileSync(this.config.TLS_CERT);
+        
+        smtpOptions.key = key;
+        smtpOptions.cert = cert;
+        
+        // Verify certificate files are valid
+        require('tls').createSecureContext({
+          key: key,
+          cert: cert
+        });
+        
+        this.logger.info('TLS certificates loaded and validated successfully');
       } catch (error) {
-        this.logger.error(`Failed to load TLS certificates: ${error.message}`);
-        throw new Error(`Failed to load TLS certificates: ${error.message}`);
+        this.logger.error(`Failed to load or validate TLS certificates: ${error.message}`);
+        throw new Error(`Failed to load or validate TLS certificates: ${error.message}`);
       }
     }
 
