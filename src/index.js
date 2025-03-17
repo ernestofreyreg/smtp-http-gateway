@@ -46,16 +46,24 @@ class SmtpHttpGateway {
     const smtpOptions = {
       secure: this.config.TLS,
       size: this.config.MAX_MESSAGE_SIZE,
-      onAuth: this.config.AUTH_REQUIRED ? (auth, session, callback) => {
-        // Store auth info in session
+      onAuth: this.config.AUTH_REQUIRED ? (auth, session, callback) => {        
         session.auth = {
           username: auth.username,
           password: auth.password
-        };        
+        };
+        this.logger.debug(`User authenticated: ${auth.username}`);
         callback(null, { user: auth.username });
       } : null,
       authOptional: !this.config.AUTH_REQUIRED,
       logger: this.config.LOG_LEVEL === 'debug',
+      // Allow non-secure connections to upgrade to TLS
+      allowInsecureAuth: !this.config.TLS,
+      // Enable STARTTLS command
+      hideSTARTTLS: false,
+      // TLS options
+      tls: {
+        rejectUnauthorized: false // Accept self-signed certificates
+      }
     };
 
     // Add TLS certificates if TLS is enabled
@@ -63,6 +71,7 @@ class SmtpHttpGateway {
       try {
         smtpOptions.key = fs.readFileSync(this.config.TLS_KEY);
         smtpOptions.cert = fs.readFileSync(this.config.TLS_CERT);
+        this.logger.info('TLS certificates loaded successfully');
       } catch (error) {
         this.logger.error(`Failed to load TLS certificates: ${error.message}`);
         throw new Error(`Failed to load TLS certificates: ${error.message}`);
@@ -75,29 +84,89 @@ class SmtpHttpGateway {
       
       // This function is called when a client connects
       onConnect: (session, callback) => {
-        this.logger.debug(`SMTP connection from ${session.remoteAddress}`);
+        this.logger.info(`New SMTP connection from ${session.remoteAddress}`, {
+          sessionId: session.id,
+          secure: session.secure,
+          tlsOptions: session.tlsOptions || 'none'
+        });
+        callback();
+      },
+      
+      // Handle STARTTLS upgrade
+      onSecure: (socket, session, callback) => {
+        this.logger.info(`TLS connection upgraded for ${session.remoteAddress}`, {
+          sessionId: session.id,
+          protocol: socket.getProtocol(),
+          cipher: socket.getCipher(),
+        });
+        callback();
+      },
+
+      // Handle client disconnections
+      onClose: (session) => {
+        this.logger.info(`SMTP connection closed for ${session.remoteAddress}`, {
+          sessionId: session.id,
+          secure: session.secure
+        });
+      },
+
+      // Log SMTP commands for debugging
+      onCommand: (cmd, args, session, callback) => {
+        this.logger.debug(`SMTP command received: ${cmd}`, {
+          sessionId: session.id,
+          args: args,
+          secure: session.secure,
+          authenticated: session.auth ? 'yes' : 'no'
+        });
         callback();
       },
       
       // This function handles the actual email data
       onData: (stream, session, callback) => {
-        this.logger.debug(`Receiving email data from ${session.remoteAddress}`);
+        this.logger.info(`Receiving email data from ${session.remoteAddress}`, {
+          sessionId: session.id,
+          secure: session.secure,
+          authenticated: session.auth ? 'yes' : 'no',
+          user: session.auth ? session.auth.username : 'anonymous'
+        });
         
         this.processEmail(stream, session)
           .then(() => {
-            this.logger.info('Email processed successfully');
+            this.logger.info('Email processed successfully', {
+              sessionId: session.id,
+              secure: session.secure
+            });
             callback();
           })
           .catch(error => {
-            this.logger.error(`Failed to process email: ${error.message}`);
+            this.logger.error(`Failed to process email: ${error.message}`, {
+              sessionId: session.id,
+              error: error.stack
+            });
             callback(new Error('Error processing email'));
           });
       }
     });
 
-    // Handle server errors
+    // Handle server errors with detailed logging
     server.on('error', error => {
-      this.logger.error(`Server error: ${error.message}`);
+      this.logger.error('SMTP Server error:', {
+        error: error.message,
+        stack: error.stack,
+        code: error.code,
+        phase: error.phase,
+        responseCode: error.responseCode
+      });
+    });
+
+    // Additional server event listeners for debugging
+    server.on('tlsError', (error, socket) => {
+      this.logger.error('TLS Error:', {
+        error: error.message,
+        stack: error.stack,
+        code: error.code,
+        remoteAddress: socket?.remoteAddress
+      });
     });
 
     return server;
