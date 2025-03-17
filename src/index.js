@@ -4,6 +4,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const { loadConfig } = require('./config');
+const { hostname } = require('os');
 
 class SmtpHttpGateway {
   constructor(customConfig = {}) {
@@ -45,6 +46,7 @@ class SmtpHttpGateway {
     // Set up the SMTP server options
     const smtpOptions = {
       secure: this.config.TLS,
+      hostname: 'smtp.emailssary.com',
       size: this.config.MAX_MESSAGE_SIZE,
       onAuth: this.config.AUTH_REQUIRED ? (auth, session, callback) => {        
         session.auth = {
