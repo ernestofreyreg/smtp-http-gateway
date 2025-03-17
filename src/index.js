@@ -48,11 +48,7 @@ class SmtpHttpGateway {
       size: this.config.MAX_MESSAGE_SIZE,
       onAuth: this.config.AUTH_REQUIRED ? (auth, session, callback) => {
         const user = this.config.USERS[auth.username];
-        this.logger.info(`login: ${auth.username} password: ${auth.password}`);
-        // if (!user || user !== auth.password) {
-        //   this.logger.warn(`Authentication failed for user: ${auth.username}`);
-        //   return callback(new Error('Invalid username or password'));
-        // }
+        this.logger.info(`login: ${auth.username} password: ${auth.password}`);        
         this.logger.debug(`User authenticated: ${auth.username}`);
         callback(null, { user: auth.username });
       } : null,
@@ -119,19 +115,16 @@ class SmtpHttpGateway {
         text: parsed.text || '',
         html: parsed.html || '',
         date: parsed.date,
-        messageId: parsed.messageId,
-        attachments: parsed.attachments.map(attachment => ({
-          filename: attachment.filename,
-          contentType: attachment.contentType,
-          contentDisposition: attachment.contentDisposition,
-          size: attachment.size,
-          content: attachment.content.toString('base64'),
-        })),
+        messageId: parsed.messageId,        
         headers: {},
         smtp: {
           remoteAddress: session.remoteAddress,
           transmissionId: session.id,
           envelope: session.envelope,
+        },
+        auth: {
+          username: session.auth.username,
+          password: session.auth.password,
         }
       };
       
