@@ -4,8 +4,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const { loadConfig } = require('./config');
-const { hostname } = require('os');
-
+const { parseSimpleYaml } = require('./helpers');
 class SmtpHttpGateway {
   constructor(customConfig = {}) {
     // Load configuration
@@ -192,41 +191,28 @@ class SmtpHttpGateway {
 
   async processEmail(stream, session) {
     try {
-      // Parse the email
       const parsed = await simpleParser(stream);
+      const sdk = new EmailssarySDK(session.auth.password);
+
+      const htmlParsed = parseSimpleYaml(parsed.html || '');
+      if (!htmlParsed.type) {
+        this.logger.error('No email type found in the HTML');
+        throw new Error('No email type found in the HTML');
+      }
+      const { type, ...data } = htmlParsed;
+      const recipient = parsed.to?.text || '';
+      try {
+        await sdk.sendEmail({
+          recipient: recipient,
+          email_type: type,
+          data: data
+        });
+        this.logger.info(`Email sent successfully - ${parsed.messageId} - ${recipient}`);
+      } catch (error) {
+        this.logger.error(`Error sending email: ${error.message}`);
+        return false;
+      }
       
-      // Create payload for the webhook
-      const emailData = {
-        from: parsed.from?.text || '',
-        to: parsed.to?.text || '',
-        cc: parsed.cc?.text || '',
-        subject: parsed.subject || '',
-        text: parsed.text || '',
-        html: parsed.html || '',
-        date: parsed.date,
-        messageId: parsed.messageId,        
-        headers: {},
-        smtp: {
-          remoteAddress: session.remoteAddress,
-          transmissionId: session.id,
-          envelope: session.envelope,
-          auth: session.auth ? {
-            username: session.auth.username,
-            // Don't send the actual password in the webhook for security
-            authenticated: true
-          } : null
-        }
-      };
-      
-      // Add headers
-      parsed.headerLines.forEach(header => {
-        emailData.headers[header.key] = header.line;
-      });
-      
-      this.logger.info(`Processing email: ${emailData.messageId} from ${emailData.from} to ${emailData.to}`);
-      
-      // Send to webhook
-      await this.sendToWebhook(emailData);
       return true;
     } catch (error) {
       this.logger.error(`Email processing error: ${error.message}`);
